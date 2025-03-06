@@ -2,6 +2,7 @@ package com.example.greeting_app.service;
 
 import com.example.greeting_app.Interface.IAuthenticationService;
 import com.example.greeting_app.dto.AuthUserDTO;
+import com.example.greeting_app.dto.ForgotPasswordDTO;
 import com.example.greeting_app.dto.LoginDTO;
 import com.example.greeting_app.exception.UserException;
 import com.example.greeting_app.model.AuthUser;
@@ -12,6 +13,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 @Service
 public class AuthenticationService implements IAuthenticationService {
@@ -33,9 +37,11 @@ public class AuthenticationService implements IAuthenticationService {
         try {
             AuthUser user = new AuthUser(userDTO);
             System.out.println(user);
-            authUserRepository.save(user);
+            String encryptedPassword = passwordEncoder.encode(userDTO.getPassword());
+            user.setPassword(encryptedPassword);
 
             String token = tokenUtil.createToken(user.getUserId());
+            authUserRepository.save(user);
 
             // Send email safely
             try {
@@ -59,11 +65,46 @@ public class AuthenticationService implements IAuthenticationService {
     @Override
     public String login(LoginDTO loginDTO){
         Optional<AuthUser> user= Optional.ofNullable(authUserRepository.findByEmail(loginDTO.getEmail()));
-        if (user.isPresent() && user.get().getPassword().equals(loginDTO.getPassword()) ){
-            emailSenderService.sendEmail(user.get().getEmail(),"Logged in Successfully!", "Hii...."+user.get().getFirstName()+"\n\n You have successfully logged in into Greeting App!");
+        if (user.isPresent()){
+            if (passwordEncoder.matches(loginDTO.getPassword(), user.get().getPassword())) {
+            emailSenderService.sendEmail(user.get().getEmail(), "Logged in Successfully!", "Hi "
+                    + user.get().getFirstName() + ",\n\nYou have successfully logged in into Greeting App!");
+
             return "Congratulations!! You have logged in successfully!";
-        }else {
+        } else {
             throw new UserException("Sorry! Email or Password is incorrect!");
         }
+    } else {
+        throw new UserException("Sorry! Email or Password is incorrect!");
     }
 }
+
+    public String forgotPassword(String email, ForgotPasswordDTO forgotPasswordDTO) {
+        Optional<AuthUser> userOptional = Optional.ofNullable(authUserRepository.findByEmail(email));
+
+        if (!userOptional.isPresent()) {
+            throw new UserException("Sorry! We cannot find the user email: " + email);
+        }
+
+        AuthUser user = userOptional.get();
+        String newPassword = forgotPasswordDTO.getPassword();
+
+        user.setPassword(passwordEncoder.encode(newPassword)); // Hash new password
+        authUserRepository.save(user); // Update password in DB
+
+        // Send confirmation email
+        emailSenderService.sendEmail(
+                user.getEmail(),
+                "Password Changed Successfully!",
+                "Hi " + user.getFirstName() + ",\n\nYour password has been successfully updated."
+        );
+
+        return "Password has been changed successfully!";
+    }
+
+
+
+
+}
+
+

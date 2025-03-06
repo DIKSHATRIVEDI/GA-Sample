@@ -1,6 +1,7 @@
 package com.example.greeting_app.controller;
 
 import com.example.greeting_app.dto.AuthUserDTO;
+import com.example.greeting_app.dto.ForgotPasswordDTO;
 import com.example.greeting_app.dto.LoginDTO;
 import com.example.greeting_app.dto.ResponseDTO;
 import com.example.greeting_app.model.AuthUser;
@@ -12,6 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
@@ -32,4 +35,14 @@ public class AuthUserController {
         ResponseDTO responseUserDTO=new ResponseDTO("Login successfully!!",result);
         return  new ResponseEntity<>(responseUserDTO,HttpStatus.OK);
     }
+
+    @PutMapping("/forgotPassword/{email}")
+    public ResponseEntity<ResponseDTO> forgotPassword(@PathVariable String email,
+                                                      @Valid @RequestBody ForgotPasswordDTO forgotPasswordDTO) {
+        String response = authenticationService.forgotPassword(email, forgotPasswordDTO);
+        return new ResponseEntity<>(new ResponseDTO(response, null), HttpStatus.OK);
+    }
+
+
+
 }
