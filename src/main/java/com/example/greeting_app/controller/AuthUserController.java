@@ -43,6 +43,13 @@ public class AuthUserController {
         return new ResponseEntity<>(new ResponseDTO(response, null), HttpStatus.OK);
     }
 
+    @PutMapping("/resetPassword/{email}")
+    public ResponseEntity<ResponseDTO> resetPassword(@PathVariable String email,
+                                                     @RequestParam String currentPassword,
+                                                     @RequestParam String newPassword) {
+        String response = authenticationService.resetPassword(email, currentPassword, newPassword);
+        return new ResponseEntity<>(new ResponseDTO(response, null), HttpStatus.OK);
+    }
 
 
 }

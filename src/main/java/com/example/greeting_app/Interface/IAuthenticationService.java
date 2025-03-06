@@ -12,4 +12,7 @@ public interface IAuthenticationService {
     String login(LoginDTO loginDTO);
 
     public String forgotPassword(String email, ForgotPasswordDTO forgotPasswordDTO);
+
+    public String resetPassword(String email, String currentPassword, String newPassword);
+
 }
