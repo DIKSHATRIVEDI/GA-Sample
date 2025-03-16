@@ -1,5 +1,6 @@
 package com.example.greeting_app.util;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Date;
@@ -10,11 +11,15 @@ import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.auth0.jwt.interfaces.JWTVerifier;
 import org.springframework.stereotype.Component;
+import java.util.HashMap;
+import java.util.Map;
 
 @Component
 public class JwtToken{
-    private static final String TOKEN_SECRET = "Lock";
-
+    @Autowired
+    static String TOKEN_SECRET = "Lock";
+    @Autowired
+    static Map<Long, String> activeTokens = new HashMap<>();
 
     public String createToken(Long id)   {
         try {
@@ -23,6 +28,7 @@ public class JwtToken{
             String token = JWT.create()
                     .withClaim("user_id", id)
                     .sign(algorithm);
+            activeTokens.put(id, token);
             return token;
 
         } catch (JWTCreationException exception) {
@@ -40,6 +46,14 @@ public class JwtToken{
         } catch (JWTVerificationException e) {
             throw new RuntimeException("Invalid or expired token.");
         }
+    }
+
+    public boolean isUserLoggedIn(Long userId, String token) {
+        return activeTokens.containsKey(userId) && activeTokens.get(userId).equals(token);
+    }
+
+    public void logoutUser(Long userId) {
+        activeTokens.remove(userId);
     }
 
 }

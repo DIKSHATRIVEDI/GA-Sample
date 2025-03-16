@@ -4,19 +4,15 @@ import com.example.greeting_app.Interface.IAuthenticationService;
 import com.example.greeting_app.dto.AuthUserDTO;
 import com.example.greeting_app.dto.ForgotPasswordDTO;
 import com.example.greeting_app.dto.LoginDTO;
-import com.example.greeting_app.exception.UserException;
 import com.example.greeting_app.model.AuthUser;
 import com.example.greeting_app.repository.AuthUserRepository;
 import com.example.greeting_app.util.EmailSenderService;
 import com.example.greeting_app.util.JwtToken;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
-
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+
 @Service
 public class AuthenticationService implements IAuthenticationService {
 
@@ -29,21 +25,17 @@ public class AuthenticationService implements IAuthenticationService {
     @Autowired
     EmailSenderService emailSenderService;
 
-
     BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @Override
-    public AuthUser register(AuthUserDTO userDTO) throws Exception {
+    public AuthUser register(AuthUserDTO userDTO) {
         try {
             AuthUser user = new AuthUser(userDTO);
-            System.out.println(user);
             String encryptedPassword = passwordEncoder.encode(userDTO.getPassword());
             user.setPassword(encryptedPassword);
-
             String token = tokenUtil.createToken(user.getUserId());
             authUserRepository.save(user);
 
-            // Send email safely
             try {
                 emailSenderService.sendEmail(
                         user.getEmail(),
@@ -58,72 +50,109 @@ public class AuthenticationService implements IAuthenticationService {
 
             return user;
         } catch (Exception e) {
-            throw new UserException("Registration failed: " + e.getMessage());
+            System.err.println("Registration failed: " + e.getMessage());
+            return null;
         }
     }
 
     @Override
-    public String login(LoginDTO loginDTO){
-        Optional<AuthUser> user= Optional.ofNullable(authUserRepository.findByEmail(loginDTO.getEmail()));
-        if (user.isPresent()){
-            if (passwordEncoder.matches(loginDTO.getPassword(), user.get().getPassword())) {
-            emailSenderService.sendEmail(user.get().getEmail(), "Logged in Successfully!", "Hi "
-                    + user.get().getFirstName() + ",\n\nYou have successfully logged in into Greeting App!");
-
-            return "Congratulations!! You have logged in successfully!";
-        } else {
-            throw new UserException("Sorry! Email or Password is incorrect!");
+    public String login(LoginDTO loginDTO) {
+        try {
+            Optional<AuthUser> user = Optional.ofNullable(authUserRepository.findByEmail(loginDTO.getEmail()));
+            if (user.isPresent()) {
+                if (passwordEncoder.matches(loginDTO.getPassword(), user.get().getPassword())) {
+                    String token = tokenUtil.createToken(user.get().getUserId());
+                    try {
+                        emailSenderService.sendEmail(
+                                user.get().getEmail(),
+                                "Logged in Successfully!",
+                                "Hi " + user.get().getFirstName() + ",\n\nYou have successfully logged in into Greeting App!"
+                        );
+                    } catch (Exception emailException) {
+                        System.err.println("Error sending email: " + emailException.getMessage());
+                    }
+                    return "Congratulations!! You have logged in successfully!"+token;
+                } else {
+                    return "Sorry! Email or Password is incorrect!";
+                }
+            } else {
+                return "Sorry! Email or Password is incorrect!";
+            }
+        } catch (Exception e) {
+            System.err.println("Login failed: " + e.getMessage());
+            return "Login failed due to a system error.";
         }
-    } else {
-        throw new UserException("Sorry! Email or Password is incorrect!");
     }
-}
+
+    public String logout(Long userId, String token) {
+        if (tokenUtil.isUserLoggedIn(userId, token)) {
+            tokenUtil.logoutUser(userId);
+            return "Successfully logged out!";
+        }
+        return "User not logged in!";
+    }
 
     public String forgotPassword(String email, ForgotPasswordDTO forgotPasswordDTO) {
-        Optional<AuthUser> userOptional = Optional.ofNullable(authUserRepository.findByEmail(email));
+        try {
+            Optional<AuthUser> userOptional = Optional.ofNullable(authUserRepository.findByEmail(email));
 
-        if (!userOptional.isPresent()) {
-            throw new UserException("Sorry! We cannot find the user email: " + email);
+            if (!userOptional.isPresent()) {
+                return "Sorry! We cannot find the user email: " + email;
+            }
+
+            AuthUser user = userOptional.get();
+            String newPassword = forgotPasswordDTO.getPassword();
+
+            user.setPassword(passwordEncoder.encode(newPassword));
+            authUserRepository.save(user);
+
+            try {
+                emailSenderService.sendEmail(
+                        user.getEmail(),
+                        "Password Changed Successfully!",
+                        "Hi " + user.getFirstName() + ",\n\nYour password has been successfully updated."
+                );
+            } catch (Exception emailException) {
+                System.err.println("Error sending email: " + emailException.getMessage());
+            }
+
+            return "Password has been changed successfully!";
+        } catch (Exception e) {
+            System.err.println("Forgot password failed: " + e.getMessage());
+            return "Failed to reset password due to a system error.";
         }
-
-        AuthUser user = userOptional.get();
-        String newPassword = forgotPasswordDTO.getPassword();
-
-        user.setPassword(passwordEncoder.encode(newPassword)); // Hash new password
-        authUserRepository.save(user); // Update password in DB
-
-        // Send confirmation email
-        emailSenderService.sendEmail(
-                user.getEmail(),
-                "Password Changed Successfully!",
-                "Hi " + user.getFirstName() + ",\n\nYour password has been successfully updated."
-        );
-
-        return "Password has been changed successfully!";
     }
 
     @Override
     public String resetPassword(String email, String currentPassword, String newPassword) {
-        AuthUser user = authUserRepository.findByEmail(email);
-        if (user == null) {
-            throw new UserException("User not found with email: " + email);
+        try {
+            AuthUser user = authUserRepository.findByEmail(email);
+            if (user == null) {
+                return "User not found with email: " + email;
+            }
+
+            if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+                return "Current password is incorrect!";
+            }
+
+            String encryptedPassword = passwordEncoder.encode(newPassword);
+            user.setPassword(encryptedPassword);
+            authUserRepository.save(user);
+
+            try {
+                emailSenderService.sendEmail(
+                        user.getEmail(),
+                        "Password Reset Successful",
+                        "Hi " + user.getFirstName() + ",\n\nYour password has been successfully updated!"
+                );
+            } catch (Exception emailException) {
+                System.err.println("Error sending email: " + emailException.getMessage());
+            }
+
+            return "Password reset successfully!";
+        } catch (Exception e) {
+            System.err.println("Reset password failed: " + e.getMessage());
+            return "Failed to reset password due to a system error.";
         }
-
-        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
-            throw new UserException("Current password is incorrect!");
-        }
-        String encryptedPassword = passwordEncoder.encode(newPassword);
-        user.setPassword(encryptedPassword);
-        authUserRepository.save(user);
-
-        emailSenderService.sendEmail(user.getEmail(),
-                "Password Reset Successful",
-                "Hi " + user.getFirstName() + ",\n\nYour password has been successfully updated!");
-
-        return "Password reset successfully!";
     }
-
-
 }
-
-

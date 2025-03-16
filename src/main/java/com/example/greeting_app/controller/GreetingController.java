@@ -1,5 +1,6 @@
 package com.example.greeting_app.controller;
 
+import com.example.greeting_app.util.JwtToken;
 import com.example.greeting_app.model.Greeting;
 import com.example.greeting_app.service.GreetingService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,50 +13,69 @@ import java.util.List;
 @RequestMapping("/greeting")
 public class GreetingController {
 
-    private final GreetingService greetingService;
+    @Autowired
+    GreetingService greetingService;
+    @Autowired
+    JwtToken jwtToken;
 
-    public GreetingController(GreetingService greetingService){
-        this.greetingService=greetingService;
+    @Autowired
+    public GreetingController(GreetingService greetingService, JwtToken jwtToken) {
+        this.greetingService = greetingService;
+        this.jwtToken = jwtToken;
     }
 
-    @PostMapping
-    public Greeting saveGreeting(@RequestBody String message) {
-        return greetingService.saveGreeting(message);
-    }
-
-    // New GET method to fetch a greeting by ID
-    @GetMapping("/{id}")
-    public Greeting getGreetingById(@PathVariable Long id) {
-        return greetingService.getGreetingById(id);
-    }
-
-    // New GET method to fetch all greeting messages
-    @GetMapping("/all")
-    public List<Greeting> getAllGreetings() {
-        return greetingService.getAllGreetings();
-    }
-
-    // PUT request to update a greeting by ID
-    @PutMapping("/update/{id}")
-    public Greeting updateGreeting(@PathVariable Long id, @RequestBody Greeting newGreeting) {
-        return greetingService.updateGreeting(id, newGreeting);
-    }
-
-    // DELETE request to remove a greeting by ID
-    @DeleteMapping("/delete/{id}")
-    public String deleteGreeting(@PathVariable Long id) {
-        boolean isDeleted = greetingService.deleteGreeting(id);
-        if (isDeleted) {
-            return "Greeting with ID " + id + " deleted successfully.";
-        } else {
-            return "Greeting with ID " + id + " not found.";
+    // Save a new greeting (User must be logged in)
+    @PostMapping("/create")
+    public Greeting saveGreeting(@RequestParam Long userId, @RequestParam String token, @RequestBody String message) {
+        if (jwtToken.isUserLoggedIn(userId, token)) {
+            return greetingService.saveGreeting(message, userId, token);
         }
+        throw new RuntimeException("Unauthorized! Please log in first.");
     }
 
+    // Get greeting by ID (User must be logged in)
+    @GetMapping("/{id}")
+    public Greeting getGreetingById(@PathVariable Long id, @RequestParam Long userId, @RequestParam String token) {
+        if (jwtToken.isUserLoggedIn(userId, token)) {
+            return greetingService.getGreetingById(id, userId, token);
+        }
+        throw new RuntimeException("Unauthorized! Please log in first.");
+    }
+
+    // Get all greetings (User must be logged in)
+    @GetMapping("/all")
+    public List<Greeting> getAllGreetings(@RequestParam Long userId, @RequestParam String token) {
+        if (jwtToken.isUserLoggedIn(userId, token)) {
+            return greetingService.getAllGreetings(userId, token);
+        }
+        throw new RuntimeException("Unauthorized! Please log in first.");
+    }
+
+    // Update a greeting (User must be logged in)
+    @PutMapping("/update/{id}")
+    public Greeting updateGreeting(@PathVariable Long id, @RequestParam Long userId, @RequestParam String token, @RequestBody Greeting newGreeting) {
+        if (jwtToken.isUserLoggedIn(userId, token)) {
+            return greetingService.updateGreeting(id, newGreeting, userId, token);
+        }
+        throw new RuntimeException("Unauthorized! Please log in first.");
+    }
+
+    // Delete a greeting (User must be logged in)
+    @DeleteMapping("/delete/{id}")
+    public String deleteGreeting(@PathVariable Long id, @RequestParam Long userId, @RequestParam String token) {
+        if (jwtToken.isUserLoggedIn(userId, token)) {
+            boolean isDeleted = greetingService.deleteGreeting(id, userId, token);
+            return isDeleted ? "Greeting with ID " + id + " deleted successfully."
+                    : "Greeting with ID " + id + " not found.";
+        }
+        throw new RuntimeException("Unauthorized! Please log in first.");
+    }
+
+    // Get a personalized greeting (No authentication required)
     @GetMapping("/personalized")
     public String getPersonalizedGreeting(@RequestParam(required = false) String firstName,
                                           @RequestParam(required = false) String lastName) {
-        return "{\"message\": " + greetingService.getPersonalizedGreeting(firstName, lastName) + "\"}";
+        return "{\"message\": \"" + greetingService.getPersonalizedGreeting(firstName, lastName) + "\"}";
     }
 
 }

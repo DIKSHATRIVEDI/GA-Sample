@@ -2,6 +2,7 @@ package com.example.greeting_app.service;
 
 import com.example.greeting_app.model.Greeting;
 import com.example.greeting_app.repository.GreetingRepository;
+import com.example.greeting_app.util.JwtToken;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -14,39 +15,53 @@ public class GreetingService {
     @Autowired
     private GreetingRepository greetingRepository;
 
-    public Greeting saveGreeting(String message) {
-        Greeting greeting = new Greeting(message);
-        return greetingRepository.save(greeting);
-    }
+    @Autowired
+    private JwtToken tokenUtil;
 
-    // New method to find a greeting by ID
-    public Greeting getGreetingById(Long id) {
-        Optional<Greeting> greeting = greetingRepository.findById(id);
-        return greeting.orElse(null); // Returns null if not found
-    }
-
-    public List<Greeting> getAllGreetings() {
-        return greetingRepository.findAll();
-    }
-
-    // Method to update an existing greeting message
-    public Greeting updateGreeting(Long id, Greeting newGreeting) {
-        Optional<Greeting> existingGreeting = greetingRepository.findById(id);
-        if (existingGreeting.isPresent()) {
-            Greeting greeting = existingGreeting.get();
-            greeting.setMessage(newGreeting.getMessage());  // Update message
-            return greetingRepository.save(greeting);  // Save updated greeting
+    public Greeting saveGreeting(String message, Long userId, String token) {
+        if (tokenUtil.isUserLoggedIn(userId, token)) {
+            Greeting greeting = new Greeting(message);
+            return greetingRepository.save(greeting);
         }
-        return null;  // Return null if ID not found
+        throw new RuntimeException("Unauthorized! Please log in first.");
     }
 
-    // Method to delete a greeting message by ID
-    public boolean deleteGreeting(Long id) {
-        if (greetingRepository.existsById(id)) {
-            greetingRepository.deleteById(id);
-            return true;  // Return true if deletion was successful
+    public Greeting getGreetingById(Long id, Long userId, String token) {
+        if (tokenUtil.isUserLoggedIn(userId, token)) {
+            return greetingRepository.findById(id).orElse(null);
         }
-        return false;  // Return false if ID was not found
+        throw new RuntimeException("Unauthorized! Please log in first.");
+    }
+
+    public List<Greeting> getAllGreetings(Long userId, String token) {
+        if (tokenUtil.isUserLoggedIn(userId, token)) {
+            return greetingRepository.findAll();
+        }
+        throw new RuntimeException("Unauthorized! Please log in first.");
+    }
+
+    public Greeting updateGreeting(Long id, Greeting newGreeting, Long userId, String token) {
+        if (tokenUtil.isUserLoggedIn(userId, token)) {
+            Optional<Greeting> existingGreeting = greetingRepository.findById(id);
+            if (existingGreeting.isPresent()) {
+                Greeting greeting = existingGreeting.get();
+                greeting.setMessage(newGreeting.getMessage());
+                return greetingRepository.save(greeting);
+            }
+            return null;
+        }
+        throw new RuntimeException("Unauthorized! Please log in first.");
+    }
+
+    public boolean deleteGreeting(Long id, Long userId, String token) {
+        if (tokenUtil.isUserLoggedIn(userId, token)) {
+            if (greetingRepository.existsById(id)) {
+                greetingRepository.deleteById(id);
+                return true;
+            }
+            return false;
+        }
+        throw new RuntimeException("Unauthorized! Please log in first.");
     }
 
     public String getPersonalizedGreeting(String firstName, String lastName) {
