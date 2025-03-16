@@ -50,6 +50,4 @@ public class AuthUserController {
         String response = authenticationService.resetPassword(email, currentPassword, newPassword);
         return new ResponseEntity<>(new ResponseDTO(response, null), HttpStatus.OK);
     }
-
-
 }
